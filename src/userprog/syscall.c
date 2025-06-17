@@ -369,38 +369,41 @@ int filesize (int fd)
 
 int read (int fd, void *buffer, unsigned length)
 {
-  /* list element to iterate the list of child threads. */
-  struct list_elem *temp;
-  lock_acquire(&lock_filesys);
+    struct list_elem *temp;
+    struct thread_file *t = NULL;
+    int bytes_read = -1;
 
-  if (fd == 0)
-  {
+    if (fd == 0) {
+        for (unsigned i = 0; i < length; i++) {
+            ((char *)buffer)[i] = input_getc();
+        }
+        return length;
+    }
+
+    if (fd == 1 || buffer == NULL) {
+        return -1;
+    }
+
+    lock_acquire(&lock_filesys);
+
+    for (temp = list_begin(&thread_current()->file_descriptors);
+         temp != list_end(&thread_current()->file_descriptors);
+         temp = list_next(temp)) {
+        t = list_entry(temp, struct thread_file, file_elem);
+        if (t->file_descriptor == fd) {
+            break;
+        }
+        t = NULL;
+    }
+
+    if (t != NULL) {
+        bytes_read = (int)file_read(t->file_addr, buffer, length);
+    }
+
     lock_release(&lock_filesys);
-    return (int) input_getc();
-  }
-
-  if (fd == 1 || list_empty(&thread_current()->file_descriptors))
-  {
-    lock_release(&lock_filesys);
-    return 0;
-  }
-
-  /* Look to see if the child thread in question is our child. */
-  for (temp = list_front(&thread_current()->file_descriptors); temp != NULL; temp = temp->next)
-  {
-      struct thread_file *t = list_entry (temp, struct thread_file, file_elem);
-      if (t->file_descriptor == fd)
-      {
-        lock_release(&lock_filesys);
-        int bytes = (int) file_read(t->file_addr, buffer, length);
-        return bytes;
-      }
-  }
-
-  lock_release(&lock_filesys);
-  /* If we can't read from the file, return -1. */
-  return -1;
+    return bytes_read;
 }
+
 void seek (int fd, unsigned position)
 {
   /* list element to iterate the list of child threads. */
