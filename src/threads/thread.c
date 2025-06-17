@@ -281,6 +281,7 @@ void
 thread_exit (void) 
 {
   ASSERT (!intr_context ());
+  sema_up(&thread_current ()->being_waited_on);
 
 #ifdef USERPROG
   process_exit ();
@@ -463,6 +464,23 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
+
+  /* Init the threads list of processes it creates. */
+  list_init(&t->child_process_list);
+  list_init(&t->file_descriptors);
+  /* Initalize the next available file descriptor to 2 (0 and 1 are reserved
+     for STDIN and STDOUT, respectively). */
+  t->cur_fd = 2;
+
+  /* Init the semaphore in charge of putting a parent thread to sleep,. */
+  sema_init(&t->being_waited_on, 0);
+
+  /* We assume the exit status is bad, unless exit() is properly
+     called (and it is assigned otherwise). */
+  t->exit_status = -1;
+
+  /* Init the thread to show it has not been waited on. */
+  t->is_waited_for = false;
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
